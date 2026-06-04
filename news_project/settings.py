@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-5%bkg1zg%)2r)2o&5(bzdnkiyk_b&@2i1lb_%829kx@)0&-!()
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['uznews-search.onrender.com', '*']
 
 
 # Application definition
