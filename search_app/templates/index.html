@@ -1,0 +1,311 @@
+{% load search_extras %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UzNews Search | Pro v3</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root { --primary: #4361ee; --bg: #f8f9ff; --success: #198754; --warning: #ffb703; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: #2b2d42; }
+        .navbar { background: white; border-bottom: 1px solid #e2e8f0; }
+        .navbar-brand { font-weight: 700; color: var(--primary); }
+
+        .search-container { background: white; border-radius: 20px; padding: 40px; box-shadow: 0 15px 35px rgba(0,0,0,0.05); margin-top: -60px; position: relative; z-index: 10; }
+        .form-control:focus { box-shadow: none; border-color: var(--primary); }
+        
+        .result-card { background: white; border: 1px solid #edf2f7; border-radius: 16px; transition: 0.3s; cursor: pointer; }
+        .result-card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.05); border-color: var(--primary); }
+        
+        .pagination .page-link { border: none; color: #64748b; margin: 0 3px; border-radius: 8px; font-weight: 600; }
+        .pagination .page-item.active .page-link { background-color: var(--primary); color: white; }
+        
+        .filter-btn { font-size: 0.85rem; padding: 5px 15px; border-radius: 20px; text-decoration: none; border: 1px solid #e2e8f0; color: #64748b; }
+        .filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        .badge-freq { background-color: rgba(25, 135, 84, 0.1); color: var(--success); border: 1px solid rgba(25, 135, 84, 0.2); }
+        .badge-total-freq { background-color: rgba(255, 183, 3, 0.15); color: #b08000; border: 1px solid rgba(255, 183, 3, 0.3); font-weight: 700; }
+
+        mark { background-color: rgba(67, 97, 238, 0.15); border-bottom: 2px solid var(--primary); color: inherit; padding: 0; }
+        
+        .token-table { font-size: 0.8rem; }
+        .token-table thead { background: #f1f5f9; }
+        .token-table td { vertical-align: middle; }
+
+        /* Fayl elementlari uchun yangi stillar */
+        .file-item { cursor: pointer; transition: 0.2s; border: 1px solid #eee !important; }
+        .file-item:hover { background-color: #f0f4ff !important; border-color: var(--primary) !important; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar py-3">
+    <div class="container">
+        <a class="navbar-brand" href="/"><i class="fa-solid fa-bolt me-2"></i>UZNEWS SEARCH</a>
+        <span class="text-muted small"><i class="fa-solid fa-database me-1"></i> {{ total_articles }} maqola</span>
+    </div>
+</nav>
+
+<div style="background: var(--primary); height: 200px;"></div>
+
+<div class="container mb-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="search-container mb-4">
+                <form method="GET" action="{% url 'index' %}" id="searchForm">
+                    <div class="row g-2">
+                        <div class="col-md-9">
+                            <div class="input-group bg-light rounded-3 px-2">
+                                <span class="input-group-text bg-transparent border-0"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+                                <input type="text" name="q" id="searchInput" class="form-control bg-transparent border-0 fs-5 py-3" 
+                                       placeholder="Kalit so'zni kiriting..." value="{{ query }}" list="suggestionList" autocomplete="off" required>
+                                <datalist id="suggestionList"></datalist>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-primary w-100 h-100 fw-bold" type="submit" style="border-radius: 12px;">
+                                Qidirish
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap align-items-center justify-content-between mt-4">
+                        <div class="algo-switch border p-1 rounded-3 bg-light">
+                            <input type="radio" class="btn-check" name="algo" id="bm25" value="bm25" {% if algo != 'tfidf' %}checked{% endif %} onchange="this.form.submit()">
+                            <label class="btn btn-sm px-3 {% if algo != 'tfidf' %}btn-primary shadow-sm{% endif %}" for="bm25">BM25+</label>
+                            
+                            <input type="radio" class="btn-check" name="algo" id="tfidf" value="tfidf" {% if algo == 'tfidf' %}checked{% endif %} onchange="this.form.submit()">
+                            <label class="btn btn-sm px-3 {% if algo == 'tfidf' %}btn-primary shadow-sm{% endif %}" for="tfidf">TF-IDF</label>
+                        </div>
+
+                        <div class="sorting-options mt-2 mt-md-0">
+                            <span class="small text-muted me-2">Saralash:</span>
+                            <a href="?q={{ query }}&algo={{ algo }}&sort=score" class="filter-btn {% if sort_by == 'score' %}active{% endif %}">Moslik</a>
+                            <a href="?q={{ query }}&algo={{ algo }}&sort=id" class="filter-btn {% if sort_by == 'id' %}active{% endif %}">ID bo'yicha</a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            {% if query %}
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="d-flex justify-content-between align-items-center mb-3 px-2">
+                            <span class="small text-muted">
+                                Natijalar: <b>{{ count }}</b> ta maqola 
+                                {% if total_freq > 0 %}
+                                    <span class="mx-1">|</span> Jami chastota: <span class="badge badge-total-freq">{{ total_freq }} marta</span>
+                                {% endif %}
+                            </span>
+                            <span class="small text-muted"><i class="fa-regular fa-clock me-1"></i> {{ duration }}s</span>
+                        </div>
+
+                        {% for res in page_obj %}
+                            <div class="result-card p-4 mb-3" data-bs-toggle="modal" data-bs-target="#m{{ res.id }}">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <span class="badge bg-light text-primary border me-1">Score: {{ res.score }}</span>
+                                        <span class="badge badge-freq"><i class="fa-solid fa-chart-simple me-1"></i> {{ res.frequency }} marta</span>
+                                    </div>
+                                    <span class="text-muted small">#{{ res.id }}</span>
+                                </div>
+                                <p class="mb-0 text-secondary">{{ res.content|highlight:query|truncatewords:40 }}</p>
+                            </div>
+
+                            <div class="modal fade" id="m{{ res.id }}" tabindex="-1">
+                                <div class="modal-dialog modal-lg modal-dialog-centered">
+                                    <div class="modal-content border-0 shadow" style="border-radius: 20px;">
+                                        <div class="modal-header border-0 px-4 pt-4">
+                                            <h5 class="fw-bold">Maqola #{{ res.id }} <span class="badge badge-freq ms-2 text-sm">{{ res.frequency }} ta so'z</span></h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body px-4 pb-4">
+                                            <div class="p-3 bg-light rounded-3" style="white-space: pre-wrap;">{{ res.content|highlight:query }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="text-center py-5">Ma'lumot topilmadi.</div>
+                        {% endfor %}
+
+                        {% if page_obj.has_other_pages %}
+                        <nav class="mt-5">
+                            <ul class="pagination justify-content-center">
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?q={{ query }}&algo={{ algo }}&sort={{ sort_by }}&page={{ page_obj.previous_page_number }}">
+                                            <i class="fa-solid fa-chevron-left"></i>
+                                        </a>
+                                    </li>
+                                {% endif %}
+
+                                {% for num in page_obj.paginator.page_range %}
+                                    {% if page_obj.number == num %}
+                                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?q={{ query }}&algo={{ algo }}&sort={{ sort_by }}&page={{ num }}">{{ num }}</a>
+                                        </li>
+                                    {% endif %}
+                                {% endfor %}
+
+                                {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?q={{ query }}&algo={{ algo }}&sort={{ sort_by }}&page={{ page_obj.next_page_number }}">
+                                            <i class="fa-solid fa-chevron-right"></i>
+                                        </a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                        {% endif %}
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                            <h6 class="fw-bold"><i class="fa-solid fa-circle-info me-2 text-primary"></i>Tizim tahlili</h6>
+                            <hr>
+                            <ul class="list-unstyled small text-muted mb-0">
+                                <li class="mb-2 d-flex justify-content-between">
+                                    <span><i class="fa-solid fa-check text-success me-2"></i>Inverted Index</span>
+                                    <span class="badge bg-light text-dark border">faol</span>
+                                </li>
+                                <li class="mb-2 d-flex justify-content-between">
+                                    <span><i class="fa-solid fa-check text-success me-2"></i>Uzbek Stemming</span>
+                                    <span class="badge bg-light text-dark border">ishlamoqda</span>
+                                </li>
+                                <li class="mb-3 d-flex justify-content-between border-bottom pb-2">
+                                    <span><i class="fa-solid fa-check text-success me-2"></i>Algoritm</span>
+                                    <span class="badge bg-primary">{{ algo|upper }}</span>
+                                </li>
+
+                                <li class="d-flex flex-column align-items-center p-3 bg-light rounded-3 mb-4">
+                                    <span class="text-uppercase mb-1" style="font-size: 0.7rem; letter-spacing: 1px;">Umumiy chastota</span>
+                                    <h2 class="fw-bold text-dark mb-0">{{ total_freq }}</h2>
+                                    <small>marta uchradi</small>
+                                </li>
+
+                                <li class="mb-2">
+                                    <p class="fw-bold text-dark mb-2" style="font-size: 0.85rem;">
+                                        <i class="fa-solid fa-list-check me-2 text-primary"></i>Lug'at tahlili (Tokens)
+                                    </p>
+                                    <div class="table-responsive rounded-3 border">
+                                        <table class="table table-sm table-hover mb-0 token-table">
+                                            <thead>
+                                                <tr>
+                                                    <th class="ps-2">Token</th>
+                                                    <th class="text-end pe-2">Soni</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% if tokens_info %}
+                                                    {% for token, freq in tokens_info.items %}
+                                                    <tr>
+                                                        <td class="ps-2 font-monospace text-primary">{{ token }}</td>
+                                                        <td class="text-end pe-2 fw-bold text-dark">{{ freq }}</td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <tr>
+                                                        <td class="ps-2 font-monospace text-primary">{{ query }}</td>
+                                                        <td class="text-end pe-2 fw-bold text-dark">{{ total_freq }}</td>
+                                                    </tr>
+                                                {% endif %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+                            <h6 class="fw-bold"><i class="fa-solid fa-folder-open me-2 text-warning"></i>Tizim fayllari</h6>
+                            <hr>
+                            <div class="list-group list-group-flush">
+                                <div class="list-group-item file-item rounded-3 mb-2 p-3 d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#modalChastota">
+                                    <i class="fa-solid fa-file-lines text-info fs-4 me-3"></i>
+                                    <div class="overflow-hidden">
+                                        <div class="fw-bold small text-truncate">sozlar_chastotasi.txt</div>
+                                        <div style="font-size: 0.7rem;" class="text-muted">Chastota lug'ati</div>
+                                    </div>
+                                </div>
+                                <div class="list-group-item file-item rounded-3 p-3 d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#modalToken">
+                                    <i class="fa-solid fa-file-code text-primary fs-4 me-3"></i>
+                                    <div class="overflow-hidden">
+                                        <div class="fw-bold small text-truncate">token_yangiliklar.txt</div>
+                                        <div style="font-size: 0.7rem;" class="text-muted">Inverted Index</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="text-center py-5">
+                    <img src="https://cdn-icons-png.flaticon.com/512/6134/6134065.png" width="80" class="opacity-25 mb-3">
+                    <h3 class="text-muted fw-light">Qidiruvni boshlang...</h3>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalChastota" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content rounded-4 border-0">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold">sozlar_chastotasi.txt mazmuni</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body bg-dark">
+                <pre class="text-success small m-0 p-3" style="font-family: 'Courier New', monospace;">{{ chastota_txt }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalToken" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content rounded-4 border-0">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title fw-bold">token_yangiliklar.txt mazmuni</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body bg-dark">
+                <pre class="text-info small m-0 p-3" style="font-family: 'Courier New', monospace;">{{ token_txt }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Autosuggestion logic
+    const searchInput = document.getElementById('searchInput');
+    const suggestionList = document.getElementById('suggestionList');
+
+    searchInput.addEventListener('input', async (e) => {
+        const val = e.target.value;
+        if (val.length >= 2) {
+            try {
+                const response = await fetch(`/suggest/?term=${val}`);
+                const suggestions = await response.json();
+                suggestionList.innerHTML = '';
+                suggestions.forEach(s => {
+                    const option = document.createElement('option');
+                    option.value = s;
+                    suggestionList.appendChild(option);
+                });
+            } catch (err) { console.log("Suggestion error:", err); }
+        }
+    });
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
