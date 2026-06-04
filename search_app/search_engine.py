@@ -1,6 +1,4 @@
 import re
-import collections
-import math
 import sqlite3
 import os
 
@@ -21,6 +19,10 @@ class UzbekNewsSearchEngine:
         text = re.sub(r"\s+", " ", text).strip()
         return text
 
+    def load_and_index(self, file_path=None):
+        """Eski kod bilan moslik uchun"""
+        pass
+
     def search(self, query, algorithm='bm25'):
         tokens = self.normalize_uz(query).split()
         if not tokens:
@@ -29,7 +31,6 @@ class UzbekNewsSearchEngine:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # Har bir token uchun LIKE qidiruv
         conditions = " AND ".join([f"content LIKE ?" for _ in tokens])
         params = [f"%{token}%" for token in tokens]
 
@@ -82,5 +83,14 @@ class UzbekNewsSearchEngine:
         conn.close()
         return count
 
-# Engine obyekti - RAM ishlatmaydi!
-engine = UzbekNewsSearchEngine()
+    def get_query_tokens_info(self, query):
+        tokens = self.normalize_uz(query).split()
+        result = {}
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        for token in tokens:
+            cursor.execute(
+                "SELECT COUNT(*) FROM articles WHERE content LIKE ?",
+                (f"%{token}%",)
+            )
+            result[token] = cursor.fetchone()[
