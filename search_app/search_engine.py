@@ -184,22 +184,10 @@ class UzbekNewsSearchEngine:
         # Natijalar bilan birga umumiy chastotani ham qaytaramiz
         return formatted_results, total_word_frequency
 
-# --- MUHIM QISM ---
-# engine = UzbekNewsSearchEngine()  ← BU QATORNI O'CHIRING
-
-# Lazy loading - faqat birinchi so'rovda yuklanadi
-_engine = None
-
-def get_engine():
-    global _engine
-    if _engine is None:
-        _engine = UzbekNewsSearchEngine()
-        if len(_engine.articles) == 0:
-            import os
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            txt_path = os.path.join(base_dir, 'yangiliklar.txt')
-            if os.path.exists(txt_path):
-                _engine.load_and_index(txt_path)
-    return _engine
-
-engine = get_engine()
+engine = UzbekNewsSearchEngine()
+if len(engine.articles) == 0:
+    import os
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    txt_path = os.path.join(base_dir, 'yangiliklar_kichik.txt')
+    if os.path.exists(txt_path):
+        engine.load_and_index(txt_path)
